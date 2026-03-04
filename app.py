@@ -46,7 +46,7 @@ def recibir_mensaje(data: Mensaje):
         }).execute()
 
         # 2️⃣ Traer últimos recuerdos
-        recuerdos = obtener_recuerdos(limit=5)
+        recuerdos = obtener_recuerdos(limit=100)
 
         # 3️⃣ Preparar texto de memoria para la respuesta
         memoria_texto = " | ".join([r["contenido"] for r in recuerdos])
