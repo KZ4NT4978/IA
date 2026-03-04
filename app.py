@@ -1,6 +1,8 @@
 from fastapi import FastAPI
+from pydantic import BaseModel
 from supabase import create_client, Client
 import os
+from datetime import datetime
 
 app = FastAPI()
 
@@ -10,11 +12,20 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+class Mensaje(BaseModel):
+    mensaje: str
+
 @app.get("/")
 def home():
     return {"status": "IA emocional activa"}
 
-@app.get("/recuerdos")
-def obtener_recuerdos():
-    data = supabase.table("recuerdos").select("*").execute()
-    return data.data
+@app.post("/mensaje")
+def recibir_mensaje(data: Mensaje):
+    # Guardar mensaje en la base de datos
+    supabase.table("recuerdos").insert({
+        "tipo": "conversacion",
+        "contenido": data.mensaje,
+        "fecha": datetime.utcnow().isoformat()
+    }).execute()
+
+    return {"respuesta": "Mensaje guardado en memoria ❤️"}
