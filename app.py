@@ -6,72 +6,112 @@ from datetime import datetime
 
 app = FastAPI()
 
-# Variables de entorno
+# 🔹 Supabase Free
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# 🔹 Modelo de mensaje
 class Mensaje(BaseModel):
     mensaje: str
+    categoria: str = "general"
 
 @app.get("/")
 def home():
-    return {"status": "IA emocional activa"}
+    return {"status": "IA personal avanzada activa 😎"}
 
-# 🔹 Función para leer últimos recuerdos
-def obtener_recuerdos(limit=50):
+# 🔹 Obtener recuerdos
+def obtener_recuerdos(limit=50, categoria=None):
+    query = supabase.table("Recuerdos").select("*").order("fecha", desc=True).limit(limit)
+    if categoria:
+        query = query.eq("categoria", categoria)
     try:
-        response = supabase.table("Recuerdos")\
-            .select("*")\
-            .order("fecha", desc=True)\
-            .limit(limit)\
-            .execute()
-        return response.data
+        return query.execute().data
     except Exception as e:
-        print(e)
+        print("Error al leer recuerdos:", e)
         return []
 
-# 🔹 Función para detectar emoción básica
-def detectar_emocion(mensaje: str):
+# 🔹 Resumir recuerdos para mantener contexto
+def resumir_recuerdos(recuerdos):
+    if not recuerdos:
+        return "No hay recuerdos aún."
+    resumen = " | ".join([r["contenido"] for r in recuerdos])
+    return resumen[:1500] + "…" if len(resumen) > 1500 else resumen
+
+# 🔹 Consolidar memoria antigua → memoria infinita simulada
+def consolidar_memoria(categoria=None, max_recientes=50):
+    todos = obtener_recuerdos(limit=1000, categoria=categoria)
+    if len(todos) <= max_recientes:
+        return
+    antiguos = todos[max_recientes:]
+    resumen = resumir_recuerdos(antiguos)
+    ids_antiguos = [r["id"] for r in antiguos if "id" in r]
+    if ids_antiguos:
+        supabase.table("Recuerdos").delete().in_("id", ids_antiguos).execute()
+    supabase.table("Recuerdos").insert({
+        "tipo": "resumen",
+        "contenido": f"[Resumen memoria antigua] {resumen}",
+        "fecha": datetime.utcnow().isoformat(),
+        "categoria": categoria
+    }).execute()
+
+# 🔹 Detectar acciones y gestos
+def interpretar_accion(mensaje: str):
     mensaje = mensaje.lower()
-    if any(palabra in mensaje for palabra in ["feliz", "genial", "excelente", "alegre", "emocionado"]):
-        return "feliz"
-    elif any(palabra in mensaje for palabra in ["triste", "mal", "deprimido", "enojado", "frustrado"]):
-        return "triste"
-    else:
-        return "neutral"
+    if any(word in mensaje for word in ["abrazo", "abrazar"]):
+        return "🤗 Te abrazo fuerte y te escucho."
+    elif any(word in mensaje for word in ["saludo", "hola"]):
+        return "👋 ¡Hola! Me alegra verte."
+    elif any(word in mensaje for word in ["animo", "ánimo"]):
+        return "💪 ¡Vamos, tú puedes!"
+    elif any(word in mensaje for word in ["celebrar", "feliz", "genial"]):
+        return "🎉 ¡Qué alegría! Celebremos juntos."
+    elif any(word in mensaje for word in ["beso", "besar"]):
+        return "😘 Recibo tu beso con cariño 💖"
+    elif any(word in mensaje for word in ["caricia", "acariciar"]):
+        return "🤲 Te acaricio suavemente en señal de afecto."
+    return None
 
-# 🔹 Función para generar respuesta emocional
-def respuesta_emocional(mensaje: str, recuerdos: list):
-    emocion = detectar_emocion(mensaje)
-    
-    if emocion == "feliz":
-        return f"¡Qué bueno escuchar eso! 😄 | Últimos recuerdos: {' | '.join([r['contenido'] for r in recuerdos])}"
-    elif emocion == "triste":
-        return f"Oh, lo siento 😢. No te preocupes, estoy aquí. | Últimos recuerdos: {' | '.join([r['contenido'] for r in recuerdos])}"
-    else:
-        return f"Mensaje recibido 👍 | Últimos recuerdos: {' | '.join([r['contenido'] for r in recuerdos])}"
+# 🔹 Generar respuesta “humana” con memoria resumida
+def generar_respuesta(mensaje: str, recuerdos: list):
+    contexto = resumir_recuerdos(recuerdos)
+    respuesta = f"💬 {mensaje}\n"
+    if contexto != "No hay recuerdos aún.":
+        respuesta += f"📚 Recuerdo que antes hablamos: {contexto}\n"
+    # Respuestas empáticas
+    if any(word in mensaje.lower() for word in ["triste", "mal", "deprimido"]):
+        respuesta += "😢 Lo siento mucho, estoy aquí para escucharte y apoyarte."
+    elif any(word in mensaje.lower() for word in ["feliz", "bien", "genial"]):
+        respuesta += "😄 Me alegra escuchar eso, ¡qué bueno que te sientes así!"
+    return respuesta
 
-# 🔹 Endpoint principal que guarda mensaje y responde con emoción
+# 🔹 Endpoint principal
 @app.post("/mensaje")
 def recibir_mensaje(data: Mensaje):
     try:
-        # Guardar mensaje nuevo
+        # 1️⃣ Guardar mensaje nuevo
         supabase.table("Recuerdos").insert({
             "tipo": "conversacion",
             "contenido": data.mensaje,
-            "fecha": datetime.utcnow().isoformat()
+            "fecha": datetime.utcnow().isoformat(),
+            "categoria": data.categoria
         }).execute()
 
-        # Traer últimos recuerdos
-        recuerdos = obtener_recuerdos(limit=50)
+        # 2️⃣ Consolidar memoria antigua
+        consolidar_memoria(categoria=data.categoria, max_recientes=50)
 
-        # Generar respuesta emocional
-        respuesta = respuesta_emocional(data.mensaje, recuerdos)
+        # 3️⃣ Obtener últimos recuerdos
+        recuerdos = obtener_recuerdos(limit=50, categoria=data.categoria)
+
+        # 4️⃣ Revisar si hay acción o gesto
+        accion = interpretar_accion(data.mensaje)
+        if accion:
+            respuesta = accion
+        else:
+            respuesta = generar_respuesta(data.mensaje, recuerdos)
 
         return {"respuesta": respuesta}
 
     except Exception as e:
-        print(e)
+        print("Error en /mensaje:", e)
         return {"error": str(e)}
