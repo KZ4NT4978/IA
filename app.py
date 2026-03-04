@@ -19,10 +19,9 @@ class Mensaje(BaseModel):
 def home():
     return {"status": "IA emocional activa"}
 
-# 🟢 Función para leer los últimos recuerdos
-def obtener_recuerdos(limit=5):
+def obtener_recuerdos(limit=50):
     """
-    Trae los últimos 'limit' mensajes de la tabla Recuerdos.
+    Trae los últimos 'limit' mensajes de la tabla Recuerdos y devuelve solo el contenido.
     """
     try:
         response = supabase.table("Recuerdos")\
@@ -30,7 +29,7 @@ def obtener_recuerdos(limit=5):
             .order("fecha", desc=True)\
             .limit(limit)\
             .execute()
-        return response.data  # lista de diccionarios
+        return response.data
     except Exception as e:
         print(e)
         return []
@@ -38,25 +37,24 @@ def obtener_recuerdos(limit=5):
 @app.post("/mensaje")
 def recibir_mensaje(data: Mensaje):
     try:
-        # 1️⃣ Guardar el mensaje nuevo
+        # Guardar el mensaje nuevo
         supabase.table("Recuerdos").insert({
             "tipo": "conversacion",
             "contenido": data.mensaje,
             "fecha": datetime.utcnow().isoformat()
         }).execute()
 
-        # 2️⃣ Traer últimos recuerdos
-        recuerdos = obtener_recuerdos(limit=100)
+        # Traer últimos recuerdos
+        recuerdos = obtener_recuerdos(limit=50)
 
-        # 3️⃣ Preparar texto de memoria para la respuesta
+        # Preparar texto de memoria
         memoria_texto = " | ".join([r["contenido"] for r in recuerdos])
 
-        # 4️⃣ Respuesta combinando confirmación + recuerdos
+        # Respuesta final
         respuesta = f"Mensaje guardado ❤️. Últimos recuerdos: {memoria_texto}"
 
         return {"respuesta": respuesta}
 
     except Exception as e:
-        # Mostrar error real si algo falla
         print(e)
         return {"error": str(e)}
