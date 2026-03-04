@@ -19,10 +19,8 @@ class Mensaje(BaseModel):
 def home():
     return {"status": "IA emocional activa"}
 
+# 🔹 Función para leer últimos recuerdos
 def obtener_recuerdos(limit=50):
-    """
-    Trae los últimos 'limit' mensajes de la tabla Recuerdos y devuelve solo el contenido.
-    """
     try:
         response = supabase.table("Recuerdos")\
             .select("*")\
@@ -34,10 +32,32 @@ def obtener_recuerdos(limit=50):
         print(e)
         return []
 
+# 🔹 Función para detectar emoción básica
+def detectar_emocion(mensaje: str):
+    mensaje = mensaje.lower()
+    if any(palabra in mensaje for palabra in ["feliz", "genial", "excelente", "alegre", "emocionado"]):
+        return "feliz"
+    elif any(palabra in mensaje for palabra in ["triste", "mal", "deprimido", "enojado", "frustrado"]):
+        return "triste"
+    else:
+        return "neutral"
+
+# 🔹 Función para generar respuesta emocional
+def respuesta_emocional(mensaje: str, recuerdos: list):
+    emocion = detectar_emocion(mensaje)
+    
+    if emocion == "feliz":
+        return f"¡Qué bueno escuchar eso! 😄 | Últimos recuerdos: {' | '.join([r['contenido'] for r in recuerdos])}"
+    elif emocion == "triste":
+        return f"Oh, lo siento 😢. No te preocupes, estoy aquí. | Últimos recuerdos: {' | '.join([r['contenido'] for r in recuerdos])}"
+    else:
+        return f"Mensaje recibido 👍 | Últimos recuerdos: {' | '.join([r['contenido'] for r in recuerdos])}"
+
+# 🔹 Endpoint principal que guarda mensaje y responde con emoción
 @app.post("/mensaje")
 def recibir_mensaje(data: Mensaje):
     try:
-        # Guardar el mensaje nuevo
+        # Guardar mensaje nuevo
         supabase.table("Recuerdos").insert({
             "tipo": "conversacion",
             "contenido": data.mensaje,
@@ -47,11 +67,8 @@ def recibir_mensaje(data: Mensaje):
         # Traer últimos recuerdos
         recuerdos = obtener_recuerdos(limit=50)
 
-        # Preparar texto de memoria
-        memoria_texto = " | ".join([r["contenido"] for r in recuerdos])
-
-        # Respuesta final
-        respuesta = f"Mensaje guardado ❤️. Últimos recuerdos: {memoria_texto}"
+        # Generar respuesta emocional
+        respuesta = respuesta_emocional(data.mensaje, recuerdos)
 
         return {"respuesta": respuesta}
 
