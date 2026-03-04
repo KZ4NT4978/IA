@@ -21,11 +21,17 @@ def home():
 
 @app.post("/mensaje")
 def recibir_mensaje(data: Mensaje):
-    # Guardar mensaje en la base de datos
-    supabase.table("recuerdos").insert({
-        "tipo": "conversacion",
-        "contenido": data.mensaje,
-        "fecha": datetime.utcnow().isoformat()
-    }).execute()
+    try:
+        # Guardar mensaje en la base de datos (tabla con R mayúscula)
+        supabase.table("Recuerdos").insert({
+            "tipo": "conversacion",
+            "contenido": data.mensaje,
+            "fecha": datetime.utcnow().isoformat()
+        }).execute()
 
-    return {"respuesta": "Mensaje guardado en memoria ❤️"}
+        return {"respuesta": "Mensaje guardado en memoria ❤️"}
+
+    except Exception as e:
+        # Mostrar error real si algo falla
+        print(e)
+        return {"error": str(e)}
