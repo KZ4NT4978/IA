@@ -78,7 +78,7 @@ Responde siempre en primera persona, inmersiva.
 
         return {"respuesta": resp}
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {"error": str(e), "respuesta": "... me perdí en la oscuridad... repite papi 🖤"}
+   except Exception as e:
+    import traceback
+    traceback.print_exc()  # esto imprime TODO el traceback en logs
+    return {"error": str(e), "respuesta": "... algo salió mal en la oscuridad 🖤"}
