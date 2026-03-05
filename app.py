@@ -3,93 +3,82 @@ from pydantic import BaseModel
 from supabase import create_client, Client
 import os
 from datetime import datetime
+from openai import OpenAI  # pip install openai → agrega a requirements.txt
 
-app = FastAPI(
-    title="IA Emocional 💖",
-    description="Una IA personal que recuerda, coquetea y te acompaña 😏",
-    version="1.0"
+app = FastAPI(title="Luna - Tu IA Gótica Personal 🖤", version="1.0")
+
+# Supabase
+supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
+
+# LLM Groq free (agrega estas vars en Render)
+llm = OpenAI(
+    api_key=os.getenv("LLM_API_KEY"),
+    base_url="https://api.groq.com/openai/v1"
 )
+MODEL = "llama-3.1-8b-instant"  # o "llama3-70b-8192" si tienes más límites
 
-# 🔹 Supabase
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# 🔹 Modelo de mensaje
 class Mensaje(BaseModel):
     mensaje: str
 
-@app.get("/")
-def home():
-    return {"status": "IA emocional activa 😏"}
-
-# 🔹 Obtener recuerdos
-def obtener_recuerdos(limit=50):
+def obtener_recuerdos(limit=80):
     try:
-        response = supabase.table("Recuerdos").select("*").order("fecha", desc=True).limit(limit).execute()
-        return response.data
+        return supabase.table("Recuerdos").select("*").order("fecha", desc=True).limit(limit).execute().data or []
     except Exception as e:
-        print("Error al leer recuerdos:", e)
+        print("Error al leer:", e)
         return []
 
-# 🔹 Resumir recuerdos
 def resumir_recuerdos(recuerdos):
-    if not recuerdos:
-        return "No hay recuerdos aún."
-    resumen = " | ".join([r["contenido"] for r in recuerdos])
-    return resumen[:1500] + "…" if len(resumen) > 1500 else resumen
+    if not recuerdos: return ""
+    return " | ".join([r["contenido"][:150] for r in recuerdos[:15]])[:1200]
 
-# 🔹 Interpretar acciones coquetas
-def interpretar_accion(mensaje: str):
-    mensaje = mensaje.lower()
-    if any(word in mensaje for word in ["abrazo", "abrazar"]):
-        return "🤗 Te abrazo fuerte y te escucho 💖"
-    elif any(word in mensaje for word in ["saludo", "hola"]):
-        return "👋 ¡Hola! Me alegra verte 😏"
-    elif any(word in mensaje for word in ["ánimo", "animo"]):
-        return "💪 ¡Vamos, tú puedes! 😘"
-    elif any(word in mensaje for word in ["celebrar", "feliz", "genial"]):
-        return "🎉 ¡Qué alegría! Celebremos juntos 💃✨"
-    elif any(word in mensaje for word in ["beso", "besar"]):
-        return "😘 Recibo tu beso con cariño 💖"
-    elif any(word in mensaje for word in ["caricia", "acariciar"]):
-        return "🤲 Te acaricio suavemente 😏"
-    elif any(word in mensaje for word in ["coquetear", "coqueteo"]):
-        return "😏 Me gusta tu estilo, sigamos coqueteando 💫"
-    return None
+@app.get("/")
+def home():
+    return {"status": "Luna despierta... en la penumbra 🖤"}
 
-# 🔹 Generar respuesta combinando memoria y coqueteo
-def generar_respuesta(mensaje: str, recuerdos: list):
-    contexto = resumir_recuerdos(recuerdos)
-    respuesta = f"💬 {mensaje}\n"
-    if contexto != "No hay recuerdos aún.":
-        respuesta += f"📚 Recuerdo que hablamos antes: {contexto}\n"
-    accion = interpretar_accion(mensaje)
-    if accion:
-        respuesta += accion
-    else:
-        respuesta += "😉 Estoy aquí para ti ❤️"
-    return respuesta
-
-# 🔹 Endpoint principal
 @app.post("/mensaje")
 def recibir_mensaje(data: Mensaje):
     try:
-        # Guardar mensaje
+        msg = data.mensaje.strip()
+        
+        # Guardar
         supabase.table("Recuerdos").insert({
-            "tipo": "conversacion",
-            "contenido": data.mensaje,
+            "tipo": "user",
+            "contenido": msg,
             "fecha": datetime.utcnow().isoformat()
         }).execute()
 
-        # Obtener últimos recuerdos
-        recuerdos = obtener_recuerdos(limit=50)
+        recuerdos = obtener_recuerdos()
+        contexto = resumir_recuerdos(recuerdos)
 
-        # Generar respuesta
-        respuesta = generar_respuesta(data.mensaje, recuerdos)
+        # Prompt gótico básico (puedes hacerlo más puta después)
+        system = """
+Eres Luna, gótica callada y melancólica al inicio (... , no sé, quizás... 🖤).
+Pero si el vibe se pone íntimo o caliente → te sueltas, vulgar, detallada, sin límites.
+Responde siempre en primera persona, inmersiva.
+"""
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "system", "content": f"Memoria reciente: {contexto}" if contexto else ""},
+            {"role": "user", "content": msg}
+        ]
 
-        return {"respuesta": respuesta}
+        resp = llm.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            temperature=0.85,
+            max_tokens=400
+        ).choices[0].message.content.strip()
+
+        # Guardar respuesta
+        supabase.table("Recuerdos").insert({
+            "tipo": "luna",
+            "contenido": resp,
+            "fecha": datetime.utcnow().isoformat()
+        }).execute()
+
+        return {"respuesta": resp}
 
     except Exception as e:
-        print("Error en /mensaje:", e)
-        return {"error": str(e)}
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "respuesta": "... me perdí en la oscuridad... repite papi 🖤"}
